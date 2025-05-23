@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BookClub - Connect through books</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
@@ -20,12 +23,23 @@
           <li><a href="#" class="nav-link" data-page="clubs">Clubs</a></li>
           <li><a href="#" class="nav-link" data-page="discover">Discover</a></li>
           <li id="auth-links">
-            <a href="#" class="nav-link btn btn-outline" data-page="login">Login</a>
-            <a href="#" class="nav-link btn btn-primary" data-page="register">Register</a>
+            <a href="#" class="nav-link btn btn-outline" data-page="login">
+              <i class="fas fa-sign-in-alt"></i> <span>Login</span>
+            </a>
+            <a href="#" class="nav-link btn btn-primary" data-page="register">
+              <i class="fas fa-user-plus"></i> <span>Register</span>
+            </a>
           </li>
           <li id="user-profile" class="hidden">
-            <span id="username"></span>
-            <a href="#" id="logout">Logout</a>
+            <a href="#" class="profile-link" data-page="profile">
+              <div class="user-avatar-small">
+                <span id="user-initials"></span>
+              </div>
+              <span id="username"></span>
+            </a>
+            <a href="#" id="logout">
+              <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
+            </a>
           </li>
         </ul>
       </nav>
@@ -242,11 +256,20 @@
           <p class="bio-text">Tell others about your reading interests...</p>
         </div>
         
+        <!-- Recent Activity Section -->
+        <div class="profile-activity">
+          <h3>📈 Recent Activity</h3>
+          <div id="activity-list" class="activity-list">
+            <!-- Activities will be loaded here -->
+          </div>
+        </div>
+        
         <div class="tabs">
           <button class="tab-btn active" data-tab="read-books">Read Books</button>
           <button class="tab-btn" data-tab="will-read-books">Want to Read</button>
           <button class="tab-btn" data-tab="recommended-books">Recommended</button>
           <button class="tab-btn" data-tab="my-clubs">My Clubs</button>
+          <button class="tab-btn" data-tab="friends">Friends</button>
           <button class="tab-btn" data-tab="settings">Settings</button>
         </div>
         
@@ -258,25 +281,61 @@
               <button class="view-btn" data-view="list"><i class="fas fa-list"></i></button>
             </div>
           </div>
-          <div class="reading-stats">
-            <div class="year-summary">
-              <h4>Reading Summary</h4>
-              <div class="stat-row">
-                <span>Books this year:</span>
-                <span id="books-this-year">0</span>
+                  <div class="reading-stats">
+          <div class="year-summary">
+            <h4>Reading Summary</h4>
+            <div class="stat-row">
+              <span>Books this year:</span>
+              <span id="books-this-year">0</span>
+            </div>
+            <div class="stat-row">
+              <span>Average rating:</span>
+              <span id="average-rating">0</span>
+            </div>
+            <div class="stat-row">
+              <span>Reading streak:</span>
+              <span id="reading-streak">0 days</span>
+            </div>
+          </div>
+          <div class="genre-breakdown">
+            <h4>Favorite Genres</h4>
+            <div id="genre-chart" class="genre-chart">
+              <!-- Genre chart will be inserted here -->
+            </div>
+          </div>
+        </div>
+        
+        <!-- Reading Goals Section -->
+        <div class="reading-goals">
+          <h4>📈 Reading Goals</h4>
+          <div class="goals-grid">
+            <div class="goal-card">
+              <div class="goal-header">
+                <span class="goal-title">Yearly Goal</span>
+                <span class="goal-target" id="yearly-goal">20 books</span>
               </div>
-              <div class="stat-row">
-                <span>Average rating:</span>
-                <span id="average-rating">0</span>
+              <div class="progress-bar">
+                <div class="progress-fill" id="yearly-progress" style="width: 45%"></div>
+              </div>
+              <div class="goal-stats">
+                <span id="yearly-current">9</span> of <span id="yearly-target">20</span> books
               </div>
             </div>
-            <div class="genre-breakdown">
-              <h4>Favorite Genres</h4>
-              <div id="genre-chart" class="genre-chart">
-                <!-- Genre chart will be inserted here -->
+            
+            <div class="goal-card">
+              <div class="goal-header">
+                <span class="goal-title">Monthly Goal</span>
+                <span class="goal-target" id="monthly-goal">2 books</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill monthly" id="monthly-progress" style="width: 75%"></div>
+              </div>
+              <div class="goal-stats">
+                <span id="monthly-current">1</span> of <span id="monthly-target">2</span> books
               </div>
             </div>
           </div>
+        </div>
           <div id="read-books-list" class="cards-container">
             <!-- Read books will be loaded here dynamically -->
           </div>
@@ -317,6 +376,29 @@
           </div>
         </div>
         
+        <div id="friends-tab" class="tab-content">
+          <div class="tab-header">
+            <h3>Friends</h3>
+            <button class="btn btn-primary" id="add-friend-btn">Add Friend</button>
+          </div>
+          
+          <!-- Friend Requests Section -->
+          <div id="friend-requests-section" class="friends-section">
+            <h4>Friend Requests</h4>
+            <div id="friend-requests-list" class="cards-container">
+              <!-- Friend requests will be loaded here -->
+            </div>
+          </div>
+          
+          <!-- Friends List Section -->
+          <div id="friends-list-section" class="friends-section">
+            <h4>My Friends</h4>
+            <div id="friends-list" class="cards-container">
+              <!-- Friends will be loaded here -->
+            </div>
+          </div>
+        </div>
+        
         <div id="settings-tab" class="tab-content">
           <div class="tab-header">
             <h3>Profile Settings</h3>
@@ -331,8 +413,16 @@
               <input type="email" id="user-email">
             </div>
             <div class="form-group">
-              <label for="user-bio">Bio</label>
+              <label for="user-bio-input">Bio</label>
               <textarea id="user-bio-input" placeholder="Tell others about your reading interests..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="user-location">Location</label>
+              <input type="text" id="user-location" placeholder="City, Country">
+            </div>
+            <div class="form-group">
+              <label for="user-website">Website/Social Media</label>
+              <input type="url" id="user-website" placeholder="https://yourdomain.com">
             </div>
             <div class="form-group">
               <label for="profile-privacy">Profile Privacy</label>
@@ -373,6 +463,16 @@
             </div>
             <button type="submit" class="btn btn-primary">Save Changes</button>
           </form>
+        </div>
+        
+
+        
+        <!-- Recent Activity Section -->
+        <div class="profile-activity">
+          <h3>Recent Activity</h3>
+          <div id="activity-list" class="activity-list">
+            <!-- Activities will be loaded dynamically -->
+          </div>
         </div>
       </div>
     </section>
@@ -619,6 +719,14 @@
             <label for="club-description">Description</label>
             <textarea id="club-description" required></textarea>
           </div>
+          <div class="form-group">
+            <label for="club-privacy">Privacy Setting</label>
+            <select id="club-privacy" required>
+              <option value="public">Public - Anyone can see and join</option>
+              <option value="friends-only">Friends Only - Only your friends can see and join</option>
+              <option value="private">Private - Invitation only</option>
+            </select>
+          </div>
           <button type="submit" class="btn btn-primary">Create Club</button>
         </form>
       </div>
@@ -745,6 +853,26 @@
       </div>
     </div>
   </footer>
+
+  <!-- Add Friend Modal -->
+  <div id="add-friend-modal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>Add Friend</h2>
+      <form id="add-friend-form">
+        <div class="form-group">
+          <label for="friend-search">Search for users</label>
+          <div class="search-container">
+            <input type="text" id="friend-search" placeholder="Enter username">
+            <button type="button" id="search-users-btn" class="btn btn-secondary">Search</button>
+          </div>
+        </div>
+        <div id="user-search-results" class="search-results">
+          <!-- Search results will appear here -->
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Toast Notification -->
   <div id="toast" class="toast"></div>

@@ -47,8 +47,35 @@ db.serialize(() => {
     name TEXT NOT NULL,
     description TEXT,
     creator_id INTEGER,
+    privacy_type TEXT DEFAULT 'public',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (creator_id) REFERENCES users(id)
+  )`);
+
+  // Friends table
+  db.run(`CREATE TABLE IF NOT EXISTS friends (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    friend_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (friend_id) REFERENCES users(id),
+    UNIQUE(user_id, friend_id)
+  )`);
+
+  // Club invitations table
+  db.run(`CREATE TABLE IF NOT EXISTS club_invitations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    club_id INTEGER NOT NULL,
+    invited_by INTEGER NOT NULL,
+    invited_user INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (club_id) REFERENCES clubs(id),
+    FOREIGN KEY (invited_by) REFERENCES users(id),
+    FOREIGN KEY (invited_user) REFERENCES users(id),
+    UNIQUE(club_id, invited_user)
   )`);
 
   // Books table
@@ -66,7 +93,7 @@ db.serialize(() => {
     FOREIGN KEY (club_id) REFERENCES clubs(id)
   )`);
 
-  // User books lists (read, will read, recommended)
+  // User books lists - removed UNIQUE constraint to allow books in multiple lists
   db.run(`CREATE TABLE IF NOT EXISTS user_books (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -76,8 +103,7 @@ db.serialize(() => {
     rating INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (book_id) REFERENCES books(id),
-    UNIQUE(user_id, book_id, list_type)
+    FOREIGN KEY (book_id) REFERENCES books(id)
   )`);
 
   // Club memberships
@@ -214,12 +240,33 @@ app.get('/api/auth/verify', (req, res) => {
 
 // Club routes
 app.get('/api/clubs', (req, res) => {
-  db.all('SELECT * FROM clubs', [], (err, clubs) => {
-    if (err) {
-      return res.status(500).json({ error: 'Server error' });
-    }
-    res.json(clubs);
-  });
+  if (!req.session.userId) {
+    // For non-authenticated users, only show public clubs
+    db.all('SELECT * FROM clubs WHERE privacy_type = ?', ['public'], (err, clubs) => {
+      if (err) {
+        return res.status(500).json({ error: 'Server error' });
+      }
+      res.json(clubs);
+    });
+  } else {
+    // For authenticated users, show public clubs + private clubs they're members of + friends-only clubs from friends
+    db.all(`
+      SELECT DISTINCT c.* FROM clubs c
+      LEFT JOIN club_members cm ON c.id = cm.club_id
+      LEFT JOIN friends f ON c.creator_id = f.friend_id OR c.creator_id = f.user_id
+      WHERE c.privacy_type = 'public'
+      OR (c.privacy_type = 'private' AND cm.user_id = ?)
+      OR (c.privacy_type = 'friends-only' AND ((f.user_id = ? OR f.friend_id = ?) AND f.status = 'accepted'))
+      OR c.creator_id = ?
+      ORDER BY c.created_at DESC
+    `, [req.session.userId, req.session.userId, req.session.userId, req.session.userId], (err, clubs) => {
+      if (err) {
+        console.error('Error fetching clubs:', err);
+        return res.status(500).json({ error: 'Server error' });
+      }
+      res.json(clubs);
+    });
+  }
 });
 
 app.post('/api/clubs', (req, res) => {
@@ -227,14 +274,20 @@ app.post('/api/clubs', (req, res) => {
     return res.status(401).json({ error: 'Not authenticated' });
   }
   
-  const { name, description } = req.body;
+  const { name, description, privacy_type = 'public' } = req.body;
   
   if (!name) {
     return res.status(400).json({ error: 'Club name is required' });
   }
   
-  const query = 'INSERT INTO clubs (name, description, creator_id) VALUES (?, ?, ?)';
-  db.run(query, [name, description, req.session.userId], function(err) {
+  // Validate privacy type
+  const validPrivacyTypes = ['public', 'private', 'friends-only'];
+  if (!validPrivacyTypes.includes(privacy_type)) {
+    return res.status(400).json({ error: 'Invalid privacy type' });
+  }
+  
+  const query = 'INSERT INTO clubs (name, description, creator_id, privacy_type) VALUES (?, ?, ?, ?)';
+  db.run(query, [name, description, req.session.userId, privacy_type], function(err) {
     if (err) {
       return res.status(500).json({ error: 'Server error' });
     }
@@ -247,7 +300,8 @@ app.post('/api/clubs', (req, res) => {
       id: this.lastID, 
       name, 
       description, 
-      creator_id: req.session.userId 
+      creator_id: req.session.userId,
+      privacy_type
     });
   });
 });
@@ -360,27 +414,33 @@ app.post('/api/clubs/:clubId/books', (req, res) => {
       return res.status(403).json({ error: 'Not a member of this club' });
     }
     
-    // Add the book
-    const query = 'INSERT INTO books (title, author, description, image_url, published_date, publisher, google_books_id, club_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-    console.log('SQL Query:', query);
-    console.log('SQL Params:', [title, author, description, image_url, published_date, publisher, google_books_id, clubId]);
-    
-    db.run(query, [title, author, description, image_url, published_date, publisher, google_books_id, clubId], function(err) {
+    // Check if this book is already in this specific list
+    db.get('SELECT * FROM user_books WHERE user_id = ? AND book_id = ? AND list_type = ?', 
+      [req.session.userId, google_books_id, 'recommended'], (err, existingEntry) => {
       if (err) {
-        console.error('Error adding book:', err);
-        return res.status(500).json({ error: 'Server error adding book' });
+        return res.status(500).json({ error: 'Server error' });
       }
       
-      res.status(201).json({ 
-        id: this.lastID, 
-        title, 
-        author, 
-        description, 
-        image_url,
-        published_date,
-        publisher,
-        google_books_id, 
-        club_id: clubId 
+      if (existingEntry) {
+        return res.status(400).json({ error: 'Book already in this list' });
+      }
+      
+      // Add book to user's list (now allows books to be in multiple different lists)
+      const query = 'INSERT INTO user_books (user_id, book_id, list_type, notes, rating) VALUES (?, ?, ?, ?, ?)';
+      db.run(query, [req.session.userId, google_books_id, 'recommended', description || null, null], function(err) {
+        if (err) {
+          console.error('Error adding book to list:', err);
+          return res.status(500).json({ error: 'Server error adding book to list' });
+        }
+        
+        res.status(201).json({ 
+          id: this.lastID, 
+          user_id: req.session.userId, 
+          book_id: google_books_id,
+          list_type: 'recommended',
+          notes: description || null,
+          rating: null
+        });
       });
     });
   });
@@ -546,7 +606,7 @@ app.post('/api/users/books', (req, res) => {
       return res.status(404).json({ error: 'Book not found' });
     }
     
-    // Check if this book is already in this list
+    // Check if this book is already in this specific list
     db.get('SELECT * FROM user_books WHERE user_id = ? AND book_id = ? AND list_type = ?', 
       [req.session.userId, book_id, list_type], (err, existingEntry) => {
       if (err) {
@@ -557,7 +617,7 @@ app.post('/api/users/books', (req, res) => {
         return res.status(400).json({ error: 'Book already in this list' });
       }
       
-      // Add book to user's list
+      // Add book to user's list (now allows books to be in multiple different lists)
       const query = 'INSERT INTO user_books (user_id, book_id, list_type, notes, rating) VALUES (?, ?, ?, ?, ?)';
       db.run(query, [req.session.userId, book_id, list_type, notes || null, rating || null], function(err) {
         if (err) {
@@ -663,6 +723,198 @@ app.delete('/api/users/books/:id', (req, res) => {
     }
     
     res.json({ message: 'Book removed from list successfully' });
+  });
+});
+
+// Friends API routes
+app.get('/api/friends', (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  // Get all friends (accepted friendships)
+  db.all(`
+    SELECT f.*, u.username as friend_username, u.email as friend_email
+    FROM friends f
+    JOIN users u ON (f.friend_id = u.id OR f.user_id = u.id)
+    WHERE (f.user_id = ? OR f.friend_id = ?) 
+    AND f.status = 'accepted'
+    AND u.id != ?
+  `, [req.session.userId, req.session.userId, req.session.userId], (err, friends) => {
+    if (err) {
+      console.error('Error fetching friends:', err);
+      return res.status(500).json({ error: 'Server error' });
+    }
+    res.json(friends);
+  });
+});
+
+app.get('/api/friends/requests', (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  // Get pending friend requests received by the user
+  db.all(`
+    SELECT f.*, u.username as requester_username, u.email as requester_email
+    FROM friends f
+    JOIN users u ON f.user_id = u.id
+    WHERE f.friend_id = ? AND f.status = 'pending'
+  `, [req.session.userId], (err, requests) => {
+    if (err) {
+      console.error('Error fetching friend requests:', err);
+      return res.status(500).json({ error: 'Server error' });
+    }
+    res.json(requests);
+  });
+});
+
+app.post('/api/friends/request', (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const { username } = req.body;
+  
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+  
+  // Find the user to befriend
+  db.get('SELECT id FROM users WHERE username = ?', [username], (err, user) => {
+    if (err) {
+      return res.status(500).json({ error: 'Server error' });
+    }
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (user.id === req.session.userId) {
+      return res.status(400).json({ error: 'Cannot add yourself as friend' });
+    }
+    
+    // Check if friendship already exists
+    db.get(`
+      SELECT * FROM friends 
+      WHERE (user_id = ? AND friend_id = ?)
+      OR (user_id = ? AND friend_id = ?)
+    `, [req.session.userId, user.id, user.id, req.session.userId], (err, existingFriend) => {
+      if (err) {
+        return res.status(500).json({ error: 'Server error' });
+      }
+      
+      if (existingFriend) {
+        return res.status(400).json({ error: 'Friend request already exists or users are already friends' });
+      }
+      
+      // Create friend request
+      db.run('INSERT INTO friends (user_id, friend_id, status) VALUES (?, ?, ?)',
+        [req.session.userId, user.id, 'pending'], function(err) {
+        if (err) {
+          return res.status(500).json({ error: 'Server error' });
+        }
+        
+        res.status(201).json({
+          id: this.lastID,
+          user_id: req.session.userId,
+          friend_id: user.id,
+          status: 'pending'
+        });
+      });
+    });
+  });
+});
+
+app.post('/api/friends/:friendshipId/accept', (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const { friendshipId } = req.params;
+  
+  // Update friendship status to accepted (only if current user is the friend_id)
+  db.run('UPDATE friends SET status = ? WHERE id = ? AND friend_id = ?',
+    ['accepted', friendshipId, req.session.userId], function(err) {
+    if (err) {
+      return res.status(500).json({ error: 'Server error' });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Friend request not found or not authorized' });
+    }
+    
+    res.json({ message: 'Friend request accepted' });
+  });
+});
+
+app.post('/api/friends/:friendshipId/decline', (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const { friendshipId } = req.params;
+  
+  // Delete friendship (only if current user is the friend_id)
+  db.run('DELETE FROM friends WHERE id = ? AND friend_id = ?',
+    [friendshipId, req.session.userId], function(err) {
+    if (err) {
+      return res.status(500).json({ error: 'Server error' });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Friend request not found or not authorized' });
+    }
+    
+    res.json({ message: 'Friend request declined' });
+  });
+});
+
+app.delete('/api/friends/:friendshipId', (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const { friendshipId } = req.params;
+  
+  // Delete friendship (if current user is involved)
+  db.run(`DELETE FROM friends WHERE id = ? AND (user_id = ? OR friend_id = ?)`,
+    [friendshipId, req.session.userId, req.session.userId], function(err) {
+    if (err) {
+      return res.status(500).json({ error: 'Server error' });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Friendship not found or not authorized' });
+    }
+    
+    res.json({ message: 'Friend removed' });
+  });
+});
+
+// Search users for adding friends
+app.get('/api/users/search', (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const { query } = req.query;
+  
+  if (!query) {
+    return res.status(400).json({ error: 'Search query is required' });
+  }
+  
+  // Search for users by username (exclude current user)
+  db.all(`
+    SELECT id, username, email 
+    FROM users 
+    WHERE username LIKE ? AND id != ?
+    LIMIT 10
+  `, [`%${query}%`, req.session.userId], (err, users) => {
+    if (err) {
+      return res.status(500).json({ error: 'Server error' });
+    }
+    res.json(users);
   });
 });
 

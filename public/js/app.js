@@ -37,6 +37,8 @@ let userBookLists = {
   recommended: []
 };
 
+
+
 // Check if user is logged in
 const checkAuth = () => {
   const userData = localStorage.getItem('bookclub_user');
@@ -44,7 +46,14 @@ const checkAuth = () => {
     currentUser = JSON.parse(userData);
     authLinks.classList.add('hidden');
     userProfile.classList.remove('hidden');
+    
+    // Set username and initials
     usernameElement.textContent = currentUser.username;
+    const userInitials = document.getElementById('user-initials');
+    if (userInitials) {
+      userInitials.textContent = currentUser.username.charAt(0).toUpperCase();
+    }
+    
     return true;
   } else {
     authLinks.classList.remove('hidden');
@@ -54,7 +63,7 @@ const checkAuth = () => {
 };
 
 // Navigation
-const navLinks = document.querySelectorAll('.nav-link');
+const navLinks = document.querySelectorAll('.nav-link, .profile-link');
 navLinks.forEach(link => {
   link.addEventListener('click', (e) => {
     e.preventDefault();
@@ -96,6 +105,8 @@ const loadUserProfile = async () => {
     return;
   }
   
+
+  
   // Set user avatar and details
   const userAvatar = document.getElementById('user-avatar');
   const userDetails = document.getElementById('user-details');
@@ -110,9 +121,14 @@ const loadUserProfile = async () => {
     <h3>${currentUser.username}</h3>
     <p>${currentUser.email}</p>
     <p>Member since: ${formatDate(currentUser.created_at || new Date())}</p>
+    ${currentUser.location ? `<p><i class="fas fa-map-marker-alt"></i> ${currentUser.location}</p>` : ''}
+    ${currentUser.website ? `<p><i class="fas fa-globe"></i> <a href="${currentUser.website}" target="_blank">${currentUser.website}</a></p>` : ''}
   `;
   
-  // Default bio text is already in the HTML
+  // Set bio text if available
+  if (currentUser.bio) {
+    userBio.innerHTML = `<p class="bio-text">${currentUser.bio}</p>`;
+  }
   
   // Setup tab navigation
   const profileTabBtns = document.querySelectorAll('#profile-page .tab-btn');
@@ -168,11 +184,16 @@ const loadUserProfile = async () => {
   const displayNameInput = document.getElementById('display-name');
   const userEmailInput = document.getElementById('user-email');
   const userBioInput = document.getElementById('user-bio-input');
+  const userLocationInput = document.getElementById('user-location');
+  const userWebsiteInput = document.getElementById('user-website');
   
   if (displayNameInput && userEmailInput && userBioInput) {
     displayNameInput.value = currentUser.username;
     userEmailInput.value = currentUser.email;
-    // Bio would be loaded from server in a real implementation
+    // In a real app, these would come from user data
+    userBioInput.value = currentUser.bio || '';
+    userLocationInput.value = currentUser.location || '';
+    userWebsiteInput.value = currentUser.website || '';
   }
   
   // Handle settings form submission
@@ -181,7 +202,34 @@ const loadUserProfile = async () => {
     profileSettingsForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      // In a real implementation, this would save to the server
+      // Update user data
+      currentUser.username = displayNameInput.value;
+      currentUser.email = userEmailInput.value;
+      currentUser.bio = userBioInput.value;
+      currentUser.location = userLocationInput.value;
+      currentUser.website = userWebsiteInput.value;
+      
+      // Save to localStorage (in a real app, this would be an API call)
+      localStorage.setItem('bookclub_user', JSON.stringify(currentUser));
+      
+      // Update displayed username
+      document.getElementById('username').textContent = currentUser.username;
+      document.getElementById('user-initials').textContent = currentUser.username.charAt(0).toUpperCase();
+      
+      // Update profile details
+      userDetails.innerHTML = `
+        <h3>${currentUser.username}</h3>
+        <p>${currentUser.email}</p>
+        <p>Member since: ${formatDate(currentUser.created_at || new Date())}</p>
+        ${currentUser.location ? `<p><i class="fas fa-map-marker-alt"></i> ${currentUser.location}</p>` : ''}
+        ${currentUser.website ? `<p><i class="fas fa-globe"></i> <a href="${currentUser.website}" target="_blank">${currentUser.website}</a></p>` : ''}
+      `;
+      
+      // Update bio
+      if (currentUser.bio) {
+        userBio.innerHTML = `<p class="bio-text">${currentUser.bio}</p>`;
+      }
+      
       showToast('Profile settings saved!', 'success');
     });
   }
@@ -199,15 +247,35 @@ const loadUserProfile = async () => {
     });
   }
   
+
+  
   // Load book lists
   await loadUserBookLists();
   
   // Load user's clubs
   await loadUserClubs();
   
+  // Load user activities
+  loadUserActivities();
+  
+  // Display user activities
+  displayUserActivities();
+  
+  // Load friends and friend requests
+  loadFriends();
+  loadFriendRequests();
+  
   // Update stats after data is loaded
   updateProfileStats();
+  
+  // Animate counters after a short delay to ensure elements are rendered
+  setTimeout(() => {
+    animateCounters();
+  }, 800);
 };
+
+
+
 
 // Load user's book lists
 const loadUserBookLists = async () => {
@@ -268,7 +336,7 @@ const displayBookList = (container, books, listType) => {
     }
     
     bookCard.innerHTML = `
-      ${book.image_url ? `<img src="${book.image_url}" alt="${book.title}" class="card-img">` : ''}
+      ${book.image_url ? `<div class="card-img-container"><img src="${book.image_url}" alt="${book.title}" class="card-img"></div>` : ''}
       <div class="card-body">
         <h3 class="card-title">${book.title}</h3>
         <p><strong>Author:</strong> ${book.author}</p>
@@ -279,8 +347,8 @@ const displayBookList = (container, books, listType) => {
         <div class="card-actions">
           ${listType !== 'read' ? `<button class="btn btn-sm btn-primary move-to-read" data-id="${book.id}">Mark as Read</button>` : ''}
           ${listType !== 'will-read' ? `<button class="btn btn-sm btn-secondary move-to-will-read" data-id="${book.id}">Want to Read</button>` : ''}
-          ${listType !== 'recommended' ? `<button class="btn btn-sm btn-info move-to-recommended" data-id="${book.id}">Recommend</button>` : ''}
-          <button class="btn btn-sm btn-danger remove-from-list" data-id="${book.id}">Remove</button>
+          ${listType !== 'recommended' ? `<button class="btn btn-sm btn-accent move-to-recommended" data-id="${book.id}"><i class="fas fa-thumbs-up"></i> Recommend</button>` : ''}
+          <button class="btn btn-sm btn-danger remove-from-list" data-id="${book.id}">Remove from ${listType === 'will-read' ? 'Want to Read' : listType === 'read' ? 'Read' : 'Recommended'}</button>
         </div>
       </div>
     `;
@@ -310,10 +378,13 @@ const displayBookList = (container, books, listType) => {
   });
 };
 
-// Move a book to a different list
+// Move a book to a different list (or add to recommended without removing from original)
 const moveBookToList = async (book, newListType) => {
   try {
-    // First add to new list
+    // If adding to recommended list, don't remove from original list
+    const isRecommending = newListType === 'recommended';
+    
+    // Add to new list
     const addResponse = await fetch('/api/users/books', {
       method: 'POST',
       headers: {
@@ -331,23 +402,41 @@ const moveBookToList = async (book, newListType) => {
     if (!addResponse.ok) {
       const error = await addResponse.json();
       if (error.error === 'Book already in this list') {
-        // If already in list, just remove from current list
-        await removeBookFromList(book.id);
+        showToast(`Book is already in the ${newListType === 'will-read' ? 'Want to Read' : newListType} list`, 'error');
+        return;
       } else {
         throw new Error(error.error || 'Failed to add book to list');
       }
-    } else {
-      // Remove from current list
+    }
+    
+    // Only remove from current list if NOT recommending
+    if (!isRecommending) {
       await removeBookFromList(book.id);
     }
     
     // Reload lists
-    loadUserBookLists();
-    showToast(`Book moved to ${newListType === 'will-read' ? 'Want to Read' : newListType} list`);
+    await loadUserBookLists();
+    
+    const actionText = isRecommending ? 'added to' : 'moved to';
+    showToast(`Book ${actionText} ${newListType === 'will-read' ? 'Want to Read' : newListType} list`);
+    
+    // Track activity
+    const listDisplayName = newListType === 'will-read' ? 'Want to Read' : newListType === 'read' ? 'Read' : 'Recommended';
+    const activityIcon = newListType === 'read' ? 'fa-check' : newListType === 'will-read' ? 'fa-bookmark' : 'fa-thumbs-up';
+    const activityAction = isRecommending ? 'Recommended book' : `Moved book to ${listDisplayName} list`;
+    
+    addActivity(
+      `book_${isRecommending ? 'recommended' : 'moved'}_${newListType}`,
+      activityAction,
+      `"${book.title}" by ${book.author}`,
+      activityIcon
+    );
+    
+    updateProfileStats();
     
   } catch (error) {
     console.error('Error moving book:', error);
-    showToast('Error moving book. Please try again.', 'error');
+    showToast('Error updating book list. Please try again.', 'error');
   }
 };
 
@@ -409,9 +498,13 @@ const loadUserClubs = async () => {
     userClubs.forEach(club => {
       const clubCard = document.createElement('div');
       clubCard.className = 'card';
+      
+      // Create privacy badge
+      const privacyBadge = getPrivacyBadge(club.privacy_type || 'public');
+      
       clubCard.innerHTML = `
         <div class="card-body">
-          <h3 class="card-title">${club.name}</h3>
+          <h3 class="card-title">${club.name} ${privacyBadge}</h3>
           <p class="card-text">${club.description || 'No description available.'}</p>
           <button class="btn btn-primary view-club-btn" data-id="${club.id}">View Club</button>
         </div>
@@ -460,6 +553,10 @@ loginForm.addEventListener('submit', async (e) => {
       
       // Update UI
       checkAuth();
+      
+      // Load user activities
+      loadUserActivities();
+      
       showToast('Login successful!', 'success');
       
       // Navigate to clubs page
@@ -558,9 +655,13 @@ const loadClubs = async () => {
     clubs.forEach(club => {
       const clubCard = document.createElement('div');
       clubCard.className = 'card';
+      
+      // Create privacy badge
+      const privacyBadge = getPrivacyBadge(club.privacy_type || 'public');
+      
       clubCard.innerHTML = `
         <div class="card-body">
-          <h3 class="card-title">${club.name}</h3>
+          <h3 class="card-title">${club.name} ${privacyBadge}</h3>
           <p class="card-text">${club.description || 'No description available.'}</p>
           <button class="btn btn-primary view-club-btn" data-id="${club.id}">View Club</button>
         </div>
@@ -667,6 +768,15 @@ const joinClub = async (clubId) => {
     
     if (response.ok) {
       showToast('You have joined the club!', 'success');
+      
+      // Track activity
+      addActivity(
+        'club_joined',
+        'Joined Book Club',
+        currentClub.name,
+        'fa-users'
+      );
+      
       loadClubDetails(currentClub);
     } else {
       const data = await response.json();
@@ -700,7 +810,7 @@ const loadClubBooks = async (clubId) => {
       const bookCard = document.createElement('div');
       bookCard.className = 'card';
       bookCard.innerHTML = `
-        ${book.image_url ? `<img src="${book.image_url}" alt="${book.title}" class="card-img">` : ''}
+        ${book.image_url ? `<div class="card-img-container"><img src="${book.image_url}" alt="${book.title}" class="card-img"></div>` : ''}
         <div class="card-body">
           <h3 class="card-title">${book.title}</h3>
           <p><strong>Author:</strong> ${book.author}</p>
@@ -755,6 +865,29 @@ const loadClubBooks = async (clubId) => {
             addBookToUserList(book, 'recommended');
           });
         }
+        
+        // Add dropdown toggle functionality
+        const dropdown = bookCard.querySelector('.dropdown');
+        const dropdownToggle = dropdown.querySelector('.dropdown-toggle');
+        
+        dropdownToggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropdown.classList.toggle('active');
+        });
+        
+        // Close dropdown when clicking elsewhere
+        document.addEventListener('click', (e) => {
+          if (!dropdown.contains(e.target)) {
+            dropdown.classList.remove('active');
+          }
+        });
+        
+        // Prevent dropdown from closing when clicking inside it
+        const dropdownContent = dropdown.querySelector('.dropdown-content');
+        dropdownContent.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
       }
     });
   } catch (error) {
@@ -794,7 +927,27 @@ const addBookToUserList = async (book, listType) => {
         throw new Error(error.error || 'Failed to add book to list');
       }
     } else {
+      // Book successfully added
       showToast(`Book added to ${listType === 'will-read' ? 'Want to Read' : listType} list successfully!`, 'success');
+      
+      // Track activity
+      const listDisplayName = listType === 'will-read' ? 'Want to Read' : listType === 'read' ? 'Read' : 'Recommended';
+      const activityIcon = listType === 'read' ? 'fa-check' : listType === 'will-read' ? 'fa-bookmark' : 'fa-thumbs-up';
+      addActivity(
+        `book_${listType}`,
+        `Added book to ${listDisplayName} list`,
+        `"${book.title}" by ${book.author}`,
+        activityIcon
+      );
+      
+      // If book was added as read, reload user's book lists
+      if (listType === 'read') {
+        // We need to reload user's book lists first
+        await loadUserBookLists();
+        
+        // Then update profile stats
+        updateProfileStats();
+      }
     }
   } catch (error) {
     console.error('Error adding book to list:', error);
@@ -981,6 +1134,14 @@ addCommentForm.addEventListener('submit', async (e) => {
     if (response.ok) {
       showToast('Comment added successfully!', 'success');
       
+      // Track activity
+      addActivity(
+        'comment_added',
+        'Added a comment',
+        `"${currentDiscussion.title}"`,
+        'fa-comment'
+      );
+      
       // Clear form
       addCommentForm.reset();
       
@@ -1013,6 +1174,7 @@ createClubForm.addEventListener('submit', async (e) => {
   
   const name = document.getElementById('club-name').value;
   const description = document.getElementById('club-description').value;
+  const privacy_type = document.getElementById('club-privacy').value;
   
   try {
     const response = await fetch('/api/clubs', {
@@ -1020,13 +1182,21 @@ createClubForm.addEventListener('submit', async (e) => {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ name, description })
+      body: JSON.stringify({ name, description, privacy_type })
     });
     
     const data = await response.json();
     
     if (response.ok) {
       showToast('Club created successfully!', 'success');
+      
+      // Track activity
+      addActivity(
+        'club_created',
+        'Created Book Club',
+        data.name,
+        'fa-plus-circle'
+      );
       
       // Close modal
       createClubModal.style.display = 'none';
@@ -1182,6 +1352,14 @@ addBookForm.addEventListener('submit', async (e) => {
     if (response.ok) {
       showToast('Book added successfully!', 'success');
       
+      // Track activity
+      addActivity(
+        'book_added_to_club',
+        'Added book to club',
+        `"${title}" to ${currentClub.name}`,
+        'fa-book-open'
+      );
+      
       // Close modal
       addBookModal.style.display = 'none';
       
@@ -1254,6 +1432,14 @@ createDiscussionForm.addEventListener('submit', async (e) => {
     if (response.ok) {
       showToast('Discussion created successfully!', 'success');
       
+      // Track activity
+      addActivity(
+        'discussion_created',
+        'Started a discussion',
+        `"${title}" in ${currentClub.name}`,
+        'fa-comments'
+      );
+      
       // Close modal
       createDiscussionModal.style.display = 'none';
       
@@ -1316,7 +1502,10 @@ const formatDate = (dateString) => {
 
 // Initialize the app
 const init = async () => {
+  // Load user data
   checkAuth();
+  
+
   
   // Verify authentication with server
   if (currentUser) {
@@ -1330,23 +1519,19 @@ const init = async () => {
         localStorage.removeItem('bookclub_user');
         currentUser = null;
         checkAuth();
-      } else {
-        // Add profile link to the nav if authenticated
-        const profileLink = document.createElement('a');
-        profileLink.className = 'nav-link';
-        profileLink.setAttribute('data-page', 'profile');
-        profileLink.textContent = 'My Profile';
-        userProfile.insertBefore(profileLink, logoutButton);
-        
-        // Add event listener to profile link
-        profileLink.addEventListener('click', (e) => {
-          e.preventDefault();
-          navigateTo('profile');
-        });
       }
     } catch (error) {
       console.error('Auth verification error:', error);
     }
+  }
+  
+  // Add event listener to profile link
+  const profileLink = document.querySelector('.profile-link');
+  if (profileLink) {
+    profileLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      navigateTo('profile');
+    });
   }
   
   // Set up tab navigation in profile page
@@ -1419,20 +1604,43 @@ const updateProfileStats = () => {
     averageRating.textContent = 'No books read';
   }
   
+  // Calculate reading streak
+  const readingStreak = document.getElementById('reading-streak');
+  if (readingStreak) {
+    // Simple streak calculation based on recent activities
+    const recentReadActivities = userActivities.filter(activity => 
+      activity.type === 'book_read' || activity.type === 'book_moved_read'
+    );
+    
+    let streakDays = 0;
+    if (recentReadActivities.length > 0) {
+      // For demo purposes, calculate based on activity frequency
+      streakDays = Math.min(recentReadActivities.length * 2, 30);
+    }
+    
+    readingStreak.textContent = `${streakDays} days`;
+  }
+  
+  // Update reading goals
+  updateReadingGoals();
+  
   // Generate genre chart
   const genreChart = document.getElementById('genre-chart');
+  
+  if (!genreChart) return; // Exit if element doesn't exist
   
   // Clear existing chart
   genreChart.innerHTML = '';
   
   // Get genres from read books (in a real app, books would have genre info)
-  // For demo purposes, we'll create random genre data
+  // For demo purposes, we'll create genre data based on the number of books
+  const booksCount = userBookLists.read ? userBookLists.read.length : 0;
   const genres = {
-    'Fiction': Math.floor(Math.random() * 15) + 5,
-    'Mystery': Math.floor(Math.random() * 10) + 3,
-    'SciFi': Math.floor(Math.random() * 8) + 2,
-    'Fantasy': Math.floor(Math.random() * 12) + 4,
-    'Romance': Math.floor(Math.random() * 7) + 1
+    'Fiction': Math.max(Math.floor(booksCount * 0.4), 2),
+    'Mystery': Math.max(Math.floor(booksCount * 0.25), 1),
+    'SciFi': Math.max(Math.floor(booksCount * 0.15), 1),
+    'Fantasy': Math.max(Math.floor(booksCount * 0.15), 1),
+    'Romance': Math.max(Math.floor(booksCount * 0.05), 0)
   };
   
   // Find max count for scaling
@@ -1453,4 +1661,515 @@ const updateProfileStats = () => {
     
     genreChart.appendChild(bar);
   });
-}; 
+};
+
+// Activity tracking system
+let userActivities = [];
+
+// Load user activities from localStorage
+const loadUserActivities = () => {
+  if (!currentUser) return;
+  
+  const savedActivities = localStorage.getItem(`bookclub_activities_${currentUser.id}`);
+  if (savedActivities) {
+    userActivities = JSON.parse(savedActivities);
+  } else {
+    userActivities = [];
+  }
+};
+
+// Save user activities to localStorage
+const saveUserActivities = () => {
+  if (!currentUser) return;
+  
+  localStorage.setItem(`bookclub_activities_${currentUser.id}`, JSON.stringify(userActivities));
+};
+
+// Add a new activity
+const addActivity = (type, title, description, icon = 'fa-info') => {
+  if (!currentUser) return;
+  
+  const activity = {
+    id: Date.now(),
+    type: type,
+    title: title,
+    description: description,
+    icon: icon,
+    timestamp: new Date().toISOString(),
+    userId: currentUser.id
+  };
+  
+  // Add to beginning of array (most recent first)
+  userActivities.unshift(activity);
+  
+  // Keep only the last 20 activities
+  if (userActivities.length > 20) {
+    userActivities = userActivities.slice(0, 20);
+  }
+  
+  saveUserActivities();
+  
+  // Update the activity display if on profile page
+  if (currentPage === 'profile') {
+    displayUserActivities();
+  }
+};
+
+// Display user activities in the profile page
+const displayUserActivities = () => {
+  const activityContainer = document.getElementById('activity-list');
+  if (!activityContainer) return;
+  
+  if (userActivities.length === 0) {
+    activityContainer.innerHTML = '<p class="no-activities">No recent activities. Start adding books or joining clubs to see your activity here!</p>';
+    return;
+  }
+  
+  activityContainer.innerHTML = '';
+  
+  userActivities.forEach(activity => {
+    const activityItem = document.createElement('div');
+    activityItem.className = 'activity-item';
+    
+    const timeAgo = formatTimeAgo(activity.timestamp);
+    
+    activityItem.innerHTML = `
+      <div class="activity-icon">
+        <i class="fas ${activity.icon}"></i>
+      </div>
+      <div class="activity-content">
+        <h4>${activity.title}</h4>
+        <p>${activity.description}</p>
+      </div>
+      <div class="activity-date">${timeAgo}</div>
+    `;
+    
+    activityContainer.appendChild(activityItem);
+  });
+};
+
+// Helper function to format time ago
+const formatTimeAgo = (timestamp) => {
+  const now = new Date();
+  const activityTime = new Date(timestamp);
+  const diffInSeconds = Math.floor((now - activityTime) / 1000);
+  
+  if (diffInSeconds < 60) {
+    return 'Just now';
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+  } else if (diffInSeconds < 2592000) {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days} day${days !== 1 ? 's' : ''} ago`;
+  } else {
+    return formatDate(timestamp);
+  }
+};
+
+// Reading Goals functionality
+const updateReadingGoals = () => {
+  // Check if we're on the profile page and elements exist
+  if (currentPage !== 'profile') return;
+  
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+  
+  // Get books read this year and month
+  const booksThisYear = userBookLists.read ? userBookLists.read.filter(book => {
+    if (!book.created_at) return false;
+    const bookYear = new Date(book.created_at).getFullYear();
+    return bookYear === currentYear;
+  }) : [];
+  
+  const booksThisMonth = userBookLists.read ? userBookLists.read.filter(book => {
+    if (!book.created_at) return false;
+    const bookDate = new Date(book.created_at);
+    return bookDate.getFullYear() === currentYear && bookDate.getMonth() === currentMonth;
+  }) : [];
+  
+  // Update yearly goal
+  const yearlyTarget = 20; // Could be made user-configurable
+  const yearlyProgress = Math.min((booksThisYear.length / yearlyTarget) * 100, 100);
+  
+  const yearlyProgressEl = document.getElementById('yearly-progress');
+  const yearlyCurrentEl = document.getElementById('yearly-current');
+  const yearlyTargetEl = document.getElementById('yearly-target');
+  
+  if (yearlyProgressEl && yearlyCurrentEl && yearlyTargetEl) {
+    yearlyProgressEl.style.width = `${yearlyProgress}%`;
+    yearlyCurrentEl.textContent = booksThisYear.length;
+    yearlyTargetEl.textContent = yearlyTarget;
+  }
+  
+  // Update monthly goal
+  const monthlyTarget = 2; // Could be made user-configurable
+  const monthlyProgress = Math.min((booksThisMonth.length / monthlyTarget) * 100, 100);
+  
+  const monthlyProgressEl = document.getElementById('monthly-progress');
+  const monthlyCurrentEl = document.getElementById('monthly-current');
+  const monthlyTargetEl = document.getElementById('monthly-target');
+  
+  if (monthlyProgressEl && monthlyCurrentEl && monthlyTargetEl) {
+    monthlyProgressEl.style.width = `${monthlyProgress}%`;
+    monthlyCurrentEl.textContent = booksThisMonth.length;
+    monthlyTargetEl.textContent = monthlyTarget;
+  }
+};
+
+// Privacy badge helper function
+const getPrivacyBadge = (privacyType) => {
+  const badges = {
+    'public': '<span class="privacy-badge public"><i class="fas fa-globe"></i> Public</span>',
+    'friends-only': '<span class="privacy-badge friends-only"><i class="fas fa-users"></i> Friends Only</span>',
+    'private': '<span class="privacy-badge private"><i class="fas fa-lock"></i> Private</span>'
+  };
+  return badges[privacyType] || badges['public'];
+};
+
+// Friends Management
+let friends = [];
+let friendRequests = [];
+
+// Load friends
+const loadFriends = async () => {
+  if (!currentUser) return;
+  
+  try {
+    const response = await fetch('/api/friends', {
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      friends = await response.json();
+      displayFriends();
+    }
+  } catch (error) {
+    console.error('Error loading friends:', error);
+  }
+};
+
+// Load friend requests
+const loadFriendRequests = async () => {
+  if (!currentUser) return;
+  
+  try {
+    const response = await fetch('/api/friends/requests', {
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      friendRequests = await response.json();
+      displayFriendRequests();
+    }
+  } catch (error) {
+    console.error('Error loading friend requests:', error);
+  }
+};
+
+// Display friends list
+const displayFriends = () => {
+  const friendsContainer = document.getElementById('friends-list');
+  if (!friendsContainer) return;
+  
+  if (friends.length === 0) {
+    friendsContainer.innerHTML = '<p class="no-activities">No friends yet. Start connecting with other readers!</p>';
+    return;
+  }
+  
+  friendsContainer.innerHTML = '';
+  
+  friends.forEach(friendship => {
+    const friendCard = document.createElement('div');
+    friendCard.className = 'friend-card';
+    
+    const friendInitials = friendship.friend_username.charAt(0).toUpperCase();
+    
+    friendCard.innerHTML = `
+      <div class="friend-avatar">${friendInitials}</div>
+      <div class="friend-name">${friendship.friend_username}</div>
+      <div class="friend-email">${friendship.friend_email}</div>
+      <div class="friend-actions">
+        <button class="btn btn-danger btn-sm remove-friend" data-id="${friendship.id}">Remove Friend</button>
+      </div>
+    `;
+    
+    friendsContainer.appendChild(friendCard);
+    
+    // Add remove friend functionality
+    const removeBtn = friendCard.querySelector('.remove-friend');
+    removeBtn.addEventListener('click', () => removeFriend(friendship.id));
+  });
+};
+
+// Display friend requests
+const displayFriendRequests = () => {
+  const requestsContainer = document.getElementById('friend-requests-list');
+  if (!requestsContainer) return;
+  
+  if (friendRequests.length === 0) {
+    requestsContainer.innerHTML = '<p class="no-activities">No pending friend requests.</p>';
+    return;
+  }
+  
+  requestsContainer.innerHTML = '';
+  
+  friendRequests.forEach(request => {
+    const requestCard = document.createElement('div');
+    requestCard.className = 'friend-card';
+    
+    const requesterInitials = request.requester_username.charAt(0).toUpperCase();
+    
+    requestCard.innerHTML = `
+      <div class="friend-avatar">${requesterInitials}</div>
+      <div class="friend-name">${request.requester_username}</div>
+      <div class="friend-email">${request.requester_email}</div>
+      <div class="friend-actions">
+        <button class="btn btn-success btn-sm accept-request" data-id="${request.id}">Accept</button>
+        <button class="btn btn-danger btn-sm decline-request" data-id="${request.id}">Decline</button>
+      </div>
+    `;
+    
+    requestsContainer.appendChild(requestCard);
+    
+    // Add accept/decline functionality
+    const acceptBtn = requestCard.querySelector('.accept-request');
+    const declineBtn = requestCard.querySelector('.decline-request');
+    
+    acceptBtn.addEventListener('click', () => acceptFriendRequest(request.id));
+    declineBtn.addEventListener('click', () => declineFriendRequest(request.id));
+  });
+};
+
+// Add friend functionality
+const addFriendBtn = document.getElementById('add-friend-btn');
+const addFriendModal = document.getElementById('add-friend-modal');
+const searchUsersBtn = document.getElementById('search-users-btn');
+const friendSearchInput = document.getElementById('friend-search');
+const userSearchResults = document.getElementById('user-search-results');
+
+if (addFriendBtn) {
+  addFriendBtn.addEventListener('click', () => {
+    if (!currentUser) {
+      showToast('Please login to add friends', 'error');
+      return;
+    }
+    
+    addFriendModal.style.display = 'block';
+    userSearchResults.innerHTML = '';
+    friendSearchInput.value = '';
+  });
+}
+
+if (searchUsersBtn) {
+  searchUsersBtn.addEventListener('click', searchUsers);
+}
+
+if (friendSearchInput) {
+  friendSearchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchUsers();
+    }
+  });
+}
+
+// Search users function
+const searchUsers = async () => {
+  const query = friendSearchInput.value.trim();
+  
+  if (!query) {
+    showToast('Please enter a username to search', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/users/search?query=${encodeURIComponent(query)}`, {
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      const users = await response.json();
+      displayUserSearchResults(users);
+    } else {
+      showToast('Error searching users', 'error');
+    }
+  } catch (error) {
+    console.error('Error searching users:', error);
+    showToast('Error searching users', 'error');
+  }
+};
+
+// Display user search results
+const displayUserSearchResults = (users) => {
+  if (users.length === 0) {
+    userSearchResults.innerHTML = '<p>No users found. Try a different search term.</p>';
+    return;
+  }
+  
+  userSearchResults.innerHTML = '';
+  
+  users.forEach(user => {
+    const userResult = document.createElement('div');
+    userResult.className = 'user-search-result';
+    
+    const userInitials = user.username.charAt(0).toUpperCase();
+    
+    userResult.innerHTML = `
+      <div class="user-search-avatar">${userInitials}</div>
+      <div class="user-search-info">
+        <div class="user-search-name">${user.username}</div>
+        <div class="user-search-email">${user.email}</div>
+      </div>
+      <button class="btn btn-primary btn-sm send-request" data-username="${user.username}">Send Request</button>
+    `;
+    
+    userSearchResults.appendChild(userResult);
+    
+    // Add send request functionality
+    const sendRequestBtn = userResult.querySelector('.send-request');
+    sendRequestBtn.addEventListener('click', () => sendFriendRequest(user.username));
+  });
+};
+
+// Send friend request
+const sendFriendRequest = async (username) => {
+  try {
+    const response = await fetch('/api/friends/request', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({ username })
+    });
+    
+    if (response.ok) {
+      showToast('Friend request sent!', 'success');
+      
+      // Track activity
+      addActivity(
+        'friend_request_sent',
+        'Sent friend request',
+        `to ${username}`,
+        'fa-user-plus'
+      );
+      
+      addFriendModal.style.display = 'none';
+    } else {
+      const error = await response.json();
+      showToast(error.error, 'error');
+    }
+  } catch (error) {
+    console.error('Error sending friend request:', error);
+    showToast('Error sending friend request', 'error');
+  }
+};
+
+// Accept friend request
+const acceptFriendRequest = async (requestId) => {
+  try {
+    const response = await fetch(`/api/friends/${requestId}/accept`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      showToast('Friend request accepted!', 'success');
+      
+      // Track activity
+      addActivity(
+        'friend_accepted',
+        'Accepted friend request',
+        '',
+        'fa-handshake'
+      );
+      
+      loadFriends();
+      loadFriendRequests();
+    } else {
+      showToast('Error accepting friend request', 'error');
+    }
+  } catch (error) {
+    console.error('Error accepting friend request:', error);
+    showToast('Error accepting friend request', 'error');
+  }
+};
+
+// Decline friend request
+const declineFriendRequest = async (requestId) => {
+  try {
+    const response = await fetch(`/api/friends/${requestId}/decline`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      showToast('Friend request declined', 'success');
+      loadFriendRequests();
+    } else {
+      showToast('Error declining friend request', 'error');
+    }
+  } catch (error) {
+    console.error('Error declining friend request:', error);
+    showToast('Error declining friend request', 'error');
+  }
+};
+
+// Remove friend
+const removeFriend = async (friendshipId) => {
+  if (!confirm('Are you sure you want to remove this friend?')) return;
+  
+  try {
+    const response = await fetch(`/api/friends/${friendshipId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      showToast('Friend removed', 'success');
+      loadFriends();
+    } else {
+      showToast('Error removing friend', 'error');
+    }
+  } catch (error) {
+    console.error('Error removing friend:', error);
+    showToast('Error removing friend', 'error');
+  }
+};
+
+// Enhanced counter animation for stats
+const animateCounters = () => {
+  const counters = document.querySelectorAll('.stat-number');
+  
+  counters.forEach(counter => {
+    const target = parseInt(counter.textContent) || 0;
+    if (target === 0) return; // Skip if target is 0
+    
+    const duration = 1000; // Animation duration in ms
+    const steps = 50;
+    const increment = target / steps;
+    const stepTime = duration / steps;
+    let current = 0;
+    
+    // Reset to 0 before animating
+    counter.textContent = '0';
+    
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= target) {
+        counter.textContent = target;
+        clearInterval(timer);
+      } else {
+        counter.textContent = Math.floor(current);
+      }
+    }, stepTime);
+  });
+};
+
+
+
+ 
