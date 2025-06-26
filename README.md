@@ -44,7 +44,3 @@ A web application for book enthusiasts to connect, create reading clubs, and sha
 - HTML, CSS, JavaScript
 - Node.js
 - SQLite
-
-## License
-
-This project is licensed under the MIT License. 

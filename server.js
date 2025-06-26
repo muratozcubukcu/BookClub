@@ -155,6 +155,7 @@ app.post('/api/register', (req, res) => {
   // Hash the password
   bcrypt.hash(password, 10, (err, hash) => {
     if (err) {
+      console.error('Error hashing password during registration:', err);
       return res.status(500).json({ error: 'Server error' });
     }
     
@@ -165,6 +166,7 @@ app.post('/api/register', (req, res) => {
         if (err.message.includes('UNIQUE constraint failed')) {
           return res.status(400).json({ error: 'Username or email already exists' });
         }
+        console.error('Error inserting user during registration:', err);
         return res.status(500).json({ error: 'Server error' });
       }
       
@@ -184,6 +186,7 @@ app.post('/api/login', (req, res) => {
   // Find user in database
   db.get('SELECT * FROM users WHERE username = ?', [username], (err, user) => {
     if (err) {
+      console.error('Error querying user during login:', err);
       return res.status(500).json({ error: 'Server error' });
     }
     
@@ -194,6 +197,7 @@ app.post('/api/login', (req, res) => {
     // Compare passwords
     bcrypt.compare(password, user.password, (err, match) => {
       if (err) {
+        console.error('Error comparing password during login:', err);
         return res.status(500).json({ error: 'Server error' });
       }
       
