@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookclub
+  labels:
+    app: bookclub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bookclub
+  template:
+    metadata:
+      labels:
+        app: bookclub
+    spec:
+      containers:
+        - name: bookclub
+          image: your-dockerhub-username/bookclub:latest
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - mountPath: /app/bookclub.db
+              name: bookclub-db
+              subPath: bookclub.db
+      volumes:
+        - name: bookclub-db
+          emptyDir: {}
