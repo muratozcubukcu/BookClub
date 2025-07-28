@@ -18,7 +18,10 @@ spec:
         - name: bookclub
           image: muratozcubukcu/bookclub:latest
           ports:
-            - containerPort: 3000
+            - containerPort: 3002
+          env:
+            - name: PORT
+              value: "3002"
           volumeMounts:
             - mountPath: /app/bookclub.db
               name: bookclub-db
