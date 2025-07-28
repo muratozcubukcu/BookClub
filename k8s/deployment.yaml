@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: bookclub
-          image: your-dockerhub-username/bookclub:latest
+          image: muratozcubukcu/bookclub:latest
           ports:
             - containerPort: 3000
           volumeMounts:
