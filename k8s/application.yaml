@@ -1,18 +1,7 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: bookclub
-  namespace: argocd
 spec:
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: bookclub
-  project: default
   source:
-    repoURL: https://github.com/yourname/bookclub.git
-    targetRevision: main
+    repoURL: https://github.com/muratozcubukcu/BookClub.git
+    targetRevision: master
     path: k8s
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+    kustomize:
+      namePrefix: ""
