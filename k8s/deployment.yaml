@@ -23,13 +23,12 @@ spec:
             - name: PORT
               value: "3002"
             - name: DB_PATH
-              value: "/usr/src/app/bookclub.db"
+              value: "/usr/src/app/db/bookclub.db"
           volumeMounts:
             - name: db-storage
-              mountPath: /usr/src/app/bookclub.db
-              subPath: bookclub.db
-      imagePullSecrets:
-        - name: regcred
+              mountPath: /usr/src/app/db
       volumes:
         - name: db-storage
           emptyDir: {}
+      imagePullSecrets:
+        - name: regcred
