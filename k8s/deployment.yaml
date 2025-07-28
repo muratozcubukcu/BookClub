@@ -19,8 +19,6 @@ spec:
           image: muratozcubukcu/bookclub:latest
           ports:
             - containerPort: 3002
-      imagePullSecrets:
-        - name: regcred
           env:
             - name: PORT
               value: "3002"
@@ -30,6 +28,8 @@ spec:
             - name: db-storage
               mountPath: /usr/src/app/bookclub.db
               subPath: bookclub.db
+      imagePullSecrets:
+        - name: regcred
       volumes:
         - name: db-storage
           emptyDir: {}
