@@ -22,10 +22,12 @@ spec:
           env:
             - name: PORT
               value: "3002"
+            - name: DB_PATH
+              value: "/usr/src/app/bookclub.db"
           volumeMounts:
-            - mountPath: /app/bookclub.db
-              name: bookclub-db
+            - name: db-storage
+              mountPath: /usr/src/app/bookclub.db
               subPath: bookclub.db
       volumes:
-        - name: bookclub-db
+        - name: db-storage
           emptyDir: {}

@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 // Database setup
-const dbPath = path.join(__dirname, 'bookclub.db');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'bookclub.db');
 const db = new sqlite3.Database(dbPath);
 
 // Middleware setup
