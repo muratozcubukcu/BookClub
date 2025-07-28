@@ -19,6 +19,8 @@ spec:
           image: muratozcubukcu/bookclub:latest
           ports:
             - containerPort: 3002
+      imagePullSecrets:
+        - name: regcred
           env:
             - name: PORT
               value: "3002"
