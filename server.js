@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 // Database setup
-const dbPath = process.env.DB_PATH || path.join(__dirname, 'bookclub.db');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'db', 'bookclub.db');
 const db = new sqlite3.Database(dbPath);
 
 // Middleware setup
@@ -1026,6 +1026,17 @@ app.get('/api/system/update-db', (req, res) => {
       });
     });
   });
+});
+
+// Add these endpoints to your Express app
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy' });
+});
+
+app.get('/ready', (req, res) => {
+  // Check if your app is ready to serve traffic
+  // e.g., database connection, dependencies loaded
+  res.status(200).json({ status: 'ready' });
 });
 
 // Serve the main HTML file for all other routes (SPA approach)

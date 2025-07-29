@@ -1,6 +1,13 @@
 resources:
   - namespace.yaml
-  - deployment.yaml
+  - configmap.yaml
+  - Deployment.yaml
   - service.yaml
 
+
 namespace: bookclub
+
+labels:
+  - pairs:
+      app: bookclub
+      version: v1.0.0
